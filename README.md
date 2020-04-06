@@ -1,4 +1,7 @@
 # process-killer
+```
+'tasklist', 'netstat', 'taskkill' 을 이용한 프로세스 확인 및 kill이 가능한 프로그램입니다.
+```
 
 ## Project setup
 ```
