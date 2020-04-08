@@ -1,17 +1,19 @@
 <template>
-  <div>
-    <div class="header">
+  <div class="layout">
+    <div class="header-area">
       <button @click="fnGetProcesses" class="btn-refresh">Refresh</button>
+      <label for="filter">Search : </label>
+      <input v-model="search" type="text" id="filter" @input="fnSearch" autofocus />
     </div>
     <div class="content-container">
-      <ul>
-        <li class="header-row">
-          <ul class="list header">
-            <li class="item-pid">PID</li>
-            <li class="item-name">Name</li>
-            <li class="item-port">Port</li>
-          </ul>
-        </li>
+      <div>
+        <ul class="list header">
+          <li class="item-pid">PID</li>
+          <li class="item-name">Name</li>
+          <li class="item-port">Port</li>
+        </ul>
+      </div>
+      <ul class="item-list">
         <li class="item-row" v-for="(task, taskIndex) in filteredTasks" :key="taskIndex">
           <ul class="list">
             <li class="item-pid">
@@ -38,12 +40,25 @@ export default {
   name: 'ProcessKiller',
   data () {
     return {
+      search: '',
       filteredTasks: [],
       tasks: [],
       nets: []
     }
   },
   methods: {
+    fnCloneDeep (target) {
+      return JSON.parse(JSON.stringify(target))
+    },
+    fnSearch (event) {
+      if (this.search && this.search.length > 0) {
+        this.filteredTasks = _.filter(this.tasks, task => {
+          return task.imageName.indexOf(this.search) > -1 || task.local.port.toString().indexOf(this.search) > -1
+        })
+      } else {
+        this.filteredTasks = this.tasks
+      }
+    },
     async fnKillProcess (pid) {
       const taskkill = require('taskkill')
 
@@ -55,9 +70,10 @@ export default {
       const tasklist = require('tasklist')
       const netstat = require('node-netstat')
 
+      this.tasks = []
       this.filteredTasks = []
       this.nets = []
-      this.tasks = await tasklist()
+      const tasks = await tasklist()
 
       netstat({
         sync: true,
@@ -73,17 +89,18 @@ export default {
         if (net.local.address && net.local.address.indexOf('0.0.0.0') > -1) {
           return
         }
-        this.tasks.forEach(task => {
+        tasks.forEach(task => {
           if (task.imageName.toUpperCase() === 'SYSTEM') {
             return
           }
           if (task.imageName && net.pid === task.pid) {
-            this.filteredTasks.push(Object.assign({}, net, task))
+            this.tasks.push(Object.assign({}, net, task))
           }
         })
       })
 
-      this.filteredTasks = _.uniqWith(this.filteredTasks, _.isEqual)
+      this.tasks = _.uniqWith(this.tasks, _.isEqual)
+      this.filteredTasks = this.tasks
     }
   },
   mounted () {
@@ -93,12 +110,15 @@ export default {
 </script>
 
 <style scoped>
-  .btn-refresh {width: 100px; height: 40px; line-height: 40px; background-color: rgb(0, 212, 177); color: #686b00; font-weight: 600; border: 1px solid rgb(0, 212, 177); border-radius: 5px; position: absolute; top: 5px; right: 10px; cursor: pointer;}
+  .layout {padding: 5px;}
+  .header-area {text-align: left; padding-left: 20px; height: 40px; line-height: 40px;}
+  .btn-refresh {width: 100px; height: 35px; line-height: 35px; background-color: rgb(0, 212, 177); color: #2e2f00; font-weight: 600; border: 1px solid rgb(0, 212, 177); border-radius: 5px; position: absolute; top: 5px; right: 10px; cursor: pointer;}
   ul, li {list-style: none; padding: 0;}
-  ul.header {height: 30px; line-height: 30px;}
-  ul.list {width: 100%;}
-  ul.list li {position: relative; display: inline-block; text-align: center; border-top: 1px solid #ccc; height: 30px; line-height: 30px; white-space: nowrap; text-overflow: ellipsis; overflow-x: hidden;}
+  ul.header {height: 15px;}
   ul.header li {background-color: #f1f1f1;}
+  ul.list {width: 100%;}
+  ul.item-list {height: calc(100% - 130px); overflow-y: auto;}
+  ul.list li {position: relative; display: inline-block; text-align: center; border-top: 1px solid #ccc; height: 30px; line-height: 30px; white-space: nowrap; text-overflow: ellipsis; overflow-x: hidden;}
   ul.list li.item-pid {width: 30%;}
   ul.list li.item-name {width: 40%;}
   ul.list li.item-port {width: 30%;}
