@@ -6,30 +6,62 @@
       <input v-model="search" type="text" id="filter" @input="fnSearch" autofocus />
     </div>
     <div class="content-container">
-      <div>
-        <ul class="list header">
-          <li class="item-pid">PID</li>
-          <li class="item-name">Name</li>
-          <li class="item-port">Port</li>
-        </ul>
-      </div>
-      <ul class="item-list">
-        <li class="item-row" v-for="(task, taskIndex) in filteredTasks" :key="taskIndex">
-          <ul class="list">
-            <li class="item-pid">
+      <table class="task-table" v-show="this.tasks && this.tasks.length > 0">
+        <colgroup>
+          <col width="20%" />
+          <col width="50%" />
+          <col width="20%" />
+          <col width="10%" />
+        </colgroup>
+        <thead class="table-header">
+          <tr class="header-row">
+            <th>PID</th>
+            <th>Name</th>
+            <th>Port</th>
+            <th>Kill</th>
+          </tr>
+        </thead>
+        <tbody class="table-body">
+          <tr v-for="(task, taskIndex) in filteredTasks" :key="taskIndex">
+            <td>
               {{ task.pid }}
-            </li>
-            <li class="item-name">
+            </td>
+            <td>
               {{ task.imageName }}
-              <button v-if="task.javaTask && task.javaTask.pid" @click="fnShowJavaDetail(task.javaTask)" class="btn detail">상세보기</button>
-            </li>
-            <li class="item-port">
+              <div v-if="task.javaTask && task.javaTask.pid" class="java-info">
+                ({{ task.javaTask.name }})
+                <button v-if="task.javaTask && task.javaTask.pid" @click="fnShowJavaDetail(task.javaTask)" class="btn detail">상세보기</button>
+              </div>
+            </td>
+            <td>
               {{ task.local.port }}
+            </td>
+            <td>
               <button @click="fnKillProcess(task.pid)" class="btn kill">&times;</button>
-            </li>
-          </ul>
-        </li>
-      </ul>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="whole_dim" v-show="nowLoading || showLayerPopup"></div>
+    <div class="loading_container" v-show="nowLoading">
+      <div class="loader"></div>
+    </div>
+
+    <div class="layer-popup" v-show="showLayerPopup">
+      <div class="close" @click="fnClosePopup"></div>
+      <div class="layer-header">
+        {{ selectedJavaTask.name }}
+      </div>
+      <div class="layer-content">
+        <div style="text-align: center;" v-if="!selectedJavaTask.args || selectedJavaTask.args.length < 1">
+          There is no args.
+        </div>
+        <div class="layer-args" v-for="(arg, index) in selectedJavaTask.args" :key="index">
+          {{ arg }}
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -41,41 +73,55 @@ export default {
   name: 'ProcessKiller',
   data () {
     return {
+      nowLoading: false,
+      showLayerPopup: false,
       search: '',
       filteredTasks: [],
       tasks: [],
       nets: [],
-      javaTasks: []
+      javaTasks: [],
+      selectedJavaTask: {}
     }
   },
   methods: {
+    fnClosePopup () {
+      this.showLayerPopup = false
+      this.selectedJavaTask = {}
+    },
     fnShowJavaDetail (javaTask) {
-      console.log(javaTask)
+      this.selectedJavaTask = javaTask
+      this.$nextTick(() => {
+        this.showLayerPopup = true
+      })
     },
     fnCmdJpsDataCallback (process) {
-      process = process.split('  ').join(' ')
-      const processArgs = process.split(' ')
+      let processArgs = process.split(' ')
       const javaTask = {
-        pid: processArgs[0],
+        pid: processArgs[0].replace(/^\s+|\s+$/g, ''),
         name: processArgs[1],
         args: ''
       }
       delete processArgs[0]
       delete processArgs[1]
-      javaTask.args = processArgs.join(' ')
-      javaTask.args = javaTask.args.substring(2)
+      processArgs = processArgs.join(' ')
+      processArgs = processArgs.substring(2)
+      javaTask.args = processArgs.split(' ')
 
       this.javaTasks.push(javaTask)
     },
     fnCmdJpsDone () {
-      this.javaTasks.forEach(javaTask => {
-        this.tasks.some(task => {
-          if (Number(task.pid) === Number(javaTask.pid)) {
-            task.javaTask = javaTask
-            return task.pid === javaTask.pid
-          }
+      if (this.javaTasks && this.javaTasks.length > 0) {
+        this.javaTasks.forEach(javaTask => {
+          this.tasks.some(task => {
+            if (Number(task.pid) === Number(javaTask.pid)) {
+              task.javaTask = javaTask
+              return task.pid === javaTask.pid
+            }
+          })
         })
-      })
+      }
+
+      this.nowLoading = false
     },
     fnCmdJps () {
       const nrc = require('node-run-cmd')
@@ -90,7 +136,11 @@ export default {
     fnSearch (event) {
       if (this.search && this.search.length > 0) {
         this.filteredTasks = _.filter(this.tasks, task => {
-          return task.imageName.indexOf(this.search) > -1 || task.local.port.toString().indexOf(this.search) > -1
+          if (task.javaTask && task.javaTask.name) {
+            return task.imageName.toLowerCase().indexOf(this.search.toLowerCase()) > -1 || task.local.port.toString().indexOf(this.search) > -1 || task.javaTask.name.toLowerCase().indexOf(this.search.toLowerCase()) > -1
+          } else {
+            return task.imageName.toLowerCase().indexOf(this.search.toLowerCase()) > -1 || task.local.port.toString().indexOf(this.search) > -1
+          }
         })
       } else {
         this.filteredTasks = this.tasks
@@ -104,6 +154,8 @@ export default {
       this.fnGetProcesses()
     },
     async fnGetProcesses () {
+      this.nowLoading = true
+
       const tasklist = require('tasklist')
       const netstat = require('node-netstat')
 
@@ -140,28 +192,63 @@ export default {
       this.filteredTasks = this.tasks
 
       this.fnCmdJps()
+    },
+    fnInitKeyEvent () {
+      this._keyListener = (e) => {
+        if (e.keyCode === 27) {
+          if (this.showLayerPopup) {
+            this.fnClosePopup()
+          } else {
+            this.search = ''
+            this.fnSearch()
+          }
+        }
+      }
+
+      document.removeEventListener('keyup', this._keyListener.bind(this))
+      document.addEventListener('keyup', this._keyListener.bind(this))
     }
   },
   mounted () {
     this.fnGetProcesses()
+    this.fnInitKeyEvent()
   }
 }
 </script>
 
 <style scoped>
-  .layout {padding: 5px;}
+  body {width: 100%; height: 100%; max-height: 100%;}
+  .layout {width: 100%; height: 100%;}
   .header-area {text-align: left; padding-left: 20px; height: 40px; line-height: 40px;}
   .btn-refresh {width: 100px; height: 35px; line-height: 35px; background-color: rgb(0, 212, 177); color: #2e2f00; font-weight: 600; border: 1px solid rgb(0, 212, 177); border-radius: 5px; position: absolute; top: 5px; right: 10px; cursor: pointer;}
-  ul, li {list-style: none; padding: 0;}
-  ul.header {height: 15px;}
-  ul.header li {background-color: #f1f1f1;}
-  ul.list {width: 100%;}
-  ul.item-list {height: calc(100% - 130px); overflow-y: auto;}
-  ul.list li {position: relative; display: inline-block; text-align: center; border-top: 1px solid #ccc; height: 30px; line-height: 30px; white-space: nowrap; text-overflow: ellipsis; overflow-x: hidden;}
-  ul.list li.item-pid {width: 30%;}
-  ul.list li.item-name {width: 40%;}
-  ul.list li.item-port {width: 30%;}
-  .btn {position: absolute; width: 20px; height: 20px; top: 5px; right: 5px; cursor: pointer;}
+  .btn {cursor: pointer;}
   .btn.kill {border: 1px solid #da0e0e; background-color: #da0e0e; color: #f1f1f1; font-weight: 600;}
-  .btn.detail {border: 1px solid #0eda85; background-color: #0eda85; color: #777; font-weight: 600;}
+  .btn.detail {border: 1px solid #0e7eda; background-color: #0e7eda; color: #f1f1f1; font-weight: 600;}
+
+  .content-container {width: 100%; max-height: 100%; margin-top: 10px;}
+  .task-table {width: 100%; height: 100%; border-collapse: collapse; border: 1px solid #999;}
+  .header-row {background-color: #c1c1c1;}
+  .header-row th {padding: 8px 0;}
+  .table-body td {padding: 8px 0; position: relative; border-bottom: 1px solid #999;}
+  .java-info {margin-top: 3px;}
+
+  .layer-popup {z-index: 889; position: fixed; top: 0; left: 0; right: 0; bottom: 0; margin: auto; width: 80%; height : 80%; background-color: #f1f1f1;}
+  .layer-header {width: 100%; height: 30px; line-height: 30px; font-weight: 600; padding: 8px 0; font-size: 1.2em; border-bottom: 2px solid #ccc;}
+  .layer-content {width: 95%; text-align: left; margin: auto; max-height: 90%; overflow-y: auto;}
+  .layer-args {word-break: break-all; margin: 7px 0;}
+
+  .layer-popup .close { position: absolute; right: 8px; top: 8px; width: 32px; height: 32px; opacity: 0.5; cursor: pointer; }
+  .layer-popup .close:hover { opacity: 1; }
+  .layer-popup .close:before, .close:after { position: absolute; left: 15px; content: ' '; height: 33px; width: 2px; background-color: #333; }
+  .layer-popup .close:before { transform: rotate(45deg); }
+  .layer-popup .close:after { transform: rotate(-45deg); }
+
+  .whole_dim {width: 100%;height: 100%;background-color: #777;opacity: 0.7;z-index: 888;position: fixed;top: 0;left: 0;}
+  .loading_container {width: 200px;height: 100px;z-index: 889;position: absolute;top: 0;left: 0;right: 0;bottom: 0;margin: auto; text-align: center;}
+  .loader { border: 16px solid #f3f3f3; border-radius: 50%; border-top: 16px solid #3498db; width: 120px; height: 120px; -webkit-animation: spin 2s linear infinite; /* Safari */ animation: spin 2s linear infinite; margin: auto; }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
 </style>
