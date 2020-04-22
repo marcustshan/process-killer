@@ -47,6 +47,11 @@
     <div class="whole_dim" v-show="nowLoading || showLayerPopup"></div>
     <div class="loading_container" v-show="nowLoading">
       <div class="loader"></div>
+      <div class="loader-text">
+        Ctrl + R or F5 단축키로
+        <br />
+        새로고침이 가능합니다.
+      </div>
     </div>
 
     <div class="layer-popup" v-show="showLayerPopup">
@@ -55,7 +60,7 @@
         {{ selectedJavaTask.name }}
       </div>
       <div class="layer-content">
-        <div style="text-align: center;" v-if="!selectedJavaTask.args || selectedJavaTask.args.length < 1">
+        <div class="no-args-text" v-if="!selectedJavaTask.args || selectedJavaTask.args.length < 1">
           There is no args.
         </div>
         <div class="layer-args" v-for="(arg, index) in selectedJavaTask.args" :key="index">
@@ -95,17 +100,17 @@ export default {
       })
     },
     fnCmdJpsDataCallback (process) {
-      let processArgs = process.split(' ')
+      const processArgs = process.split(' ')
       const javaTask = {
         pid: processArgs[0].replace(/^\s+|\s+$/g, ''),
-        name: processArgs[1],
+        name: processArgs.length > 1 ? processArgs[1] : '',
         args: ''
       }
-      delete processArgs[0]
-      delete processArgs[1]
-      processArgs = processArgs.join(' ')
-      processArgs = processArgs.substring(2)
-      javaTask.args = processArgs.split(' ')
+
+      if (processArgs.length > 1) {
+        processArgs.splice(0, 2)
+        javaTask.args = processArgs
+      }
 
       this.javaTasks.push(javaTask)
     },
@@ -123,11 +128,15 @@ export default {
 
       this.nowLoading = false
     },
+    fnCmdJpsError () {
+      this.nowLoading = false
+    },
     fnCmdJps () {
       const nrc = require('node-run-cmd')
       nrc.run('jps -v', {
         onData: this.fnCmdJpsDataCallback,
-        onDone: this.fnCmdJpsDone
+        onDone: this.fnCmdJpsDone,
+        onError: this.fnCmdJpsError
       })
     },
     fnCloneDeep (target) {
@@ -195,7 +204,11 @@ export default {
     },
     fnInitKeyEvent () {
       this._keyListener = (e) => {
-        if (e.keyCode === 27) {
+        if (e.key.toLowerCase() === 'r' && (e.ctrlKey || e.metaKey)) {
+          require('electron').remote.getCurrentWindow().reload()
+        } else if (e.key === 'F5') {
+          require('electron').remote.getCurrentWindow().reload()
+        } else if (e.keyCode === 27) {
           if (this.showLayerPopup) {
             this.fnClosePopup()
           } else {
@@ -219,13 +232,13 @@ export default {
 <style scoped>
   body {width: 100%; height: 100%; max-height: 100%;}
   .layout {width: 100%; height: 100%;}
-  .header-area {text-align: left; padding-left: 20px; height: 40px; line-height: 40px;}
-  .btn-refresh {width: 100px; height: 35px; line-height: 35px; background-color: rgb(0, 212, 177); color: #2e2f00; font-weight: 600; border: 1px solid rgb(0, 212, 177); border-radius: 5px; position: absolute; top: 5px; right: 10px; cursor: pointer;}
+  .header-area {text-align: left; padding-left: 20px; height: 40px; line-height: 40px; margin: 10px 0;}
+  .btn-refresh {width: 100px; height: 35px; line-height: 35px; background-color: rgb(0, 212, 177); color: #2e2f00; font-weight: 600; border: 1px solid rgb(0, 212, 177); border-radius: 5px; position: absolute; top: 15px; right: 10px; cursor: pointer;}
   .btn {cursor: pointer;}
   .btn.kill {border: 1px solid #da0e0e; background-color: #da0e0e; color: #f1f1f1; font-weight: 600;}
   .btn.detail {border: 1px solid #0e7eda; background-color: #0e7eda; color: #f1f1f1; font-weight: 600;}
 
-  .content-container {width: 100%; max-height: 100%; margin-top: 10px;}
+  .content-container {width: 100%; height: 100%;}
   .task-table {width: 100%; height: 100%; border-collapse: collapse; border: 1px solid #999;}
   .header-row {background-color: #c1c1c1;}
   .header-row th {padding: 8px 0;}
@@ -235,6 +248,7 @@ export default {
   .layer-popup {z-index: 889; position: fixed; top: 0; left: 0; right: 0; bottom: 0; margin: auto; width: 80%; height : 80%; background-color: #f1f1f1;}
   .layer-header {width: 100%; height: 30px; line-height: 30px; font-weight: 600; padding: 8px 0; font-size: 1.2em; border-bottom: 2px solid #ccc;}
   .layer-content {width: 95%; text-align: left; margin: auto; max-height: 90%; overflow-y: auto;}
+  .no-args-text {margin-top: 10px; font-size: 1.2em; font-weight: 600; text-align: center;}
   .layer-args {word-break: break-all; margin: 7px 0;}
 
   .layer-popup .close { position: absolute; right: 8px; top: 8px; width: 32px; height: 32px; opacity: 0.5; cursor: pointer; }
@@ -246,6 +260,7 @@ export default {
   .whole_dim {width: 100%;height: 100%;background-color: #777;opacity: 0.7;z-index: 888;position: fixed;top: 0;left: 0;}
   .loading_container {width: 200px;height: 100px;z-index: 889;position: absolute;top: 0;left: 0;right: 0;bottom: 0;margin: auto; text-align: center;}
   .loader { border: 16px solid #f3f3f3; border-radius: 50%; border-top: 16px solid #3498db; width: 120px; height: 120px; -webkit-animation: spin 2s linear infinite; /* Safari */ animation: spin 2s linear infinite; margin: auto; }
+  .loader-text { font-weight: 600; color: #ffffff; margin-top: 10px; }
 
   @keyframes spin {
     0% { transform: rotate(0deg); }

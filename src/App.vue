@@ -16,7 +16,7 @@ export default {
 </script>
 
 <style>
-body {padding: 0; margin: 0;}
+body {padding: 0; margin: 0; min-height: 100%; max-height: 100%;}
 #app {
   font-family: Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -24,6 +24,7 @@ body {padding: 0; margin: 0;}
   text-align: center;
   color: #2c3e50;
   height: 100%;
+  max-height: 100%;
   overflow: hidden;
 }
 </style>

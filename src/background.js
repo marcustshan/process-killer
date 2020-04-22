@@ -17,8 +17,10 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { secure: tru
 function createWindow () {
   // Create the browser window.
   win = new BrowserWindow({
-    width: 500,
+    width: 600,
     height: 800,
+    minWidth: 500,
+    minHeight: 600,
     webPreferences: {
       nodeIntegration: true
     }
@@ -37,6 +39,12 @@ function createWindow () {
   win.on('closed', () => {
     win = null
   })
+
+  const path = require('path')
+  const nativeImage = require('electron').nativeImage
+  console.log(__dirname)
+  win.setIcon(nativeImage.createFromPath(path.join(__dirname, '../assets/icons/win/icon.ico')))
+  win.setMenu(null)
 }
 
 // Quit when all windows are closed.
